@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Line Dither</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0e0e10;
+  --surface: #16161a;
+  --surface2: #1e1e24;
+  --border: #2a2a32;
+  --border2: #38383f;
+  --text: #e2e2e8;
+  --muted: #8a8a9a;
+  --color-ok: #6ee7b7;
+  --color-err: #fca5a5;
+  --text-dim: #c8c8d0;
+  --bg-overlay: color-mix(in srgb, var(--bg) 70%, transparent);
+  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --radius: 4px;
+  --sidebar-w: 320px;
+  --fs-xs:   0.6875rem;
+  --fs-sm:   0.75rem;
+  --fs-base: 0.8125rem;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  font-kerning: normal;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: 40px 1fr;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Topbar ── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+header h1 {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); }
+
+#status-text {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+#status-text.busy { color: var(--text); }
+#status-text.ok   { color: var(--color-ok); }
+#status-text.err  { color: var(--color-err); }
+
+/* ── Sidebar ── */
+aside {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--fs-base);
+  line-height: 1.8;
+  transition: border-color 0.15s ease-out, background 0.15s ease-out, color 0.15s ease-out;
+  margin-bottom: 14px;
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.over, .drop-zone:focus-within {
+  border-color: var(--border);
+  background: var(--surface2);
+  color: var(--text);
+}
+.drop-zone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.drop-zone .fname {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Section ── */
+.section-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 12px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Slider row ── */
+.ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+.ctrl-label {
+  width: 90px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-family: var(--mono);
+  cursor: default;
+}
+.ctrl input[type=range] {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 2px;
+  background: var(--border2);
+  border-radius: 1px;
+  cursor: pointer;
+}
+.ctrl input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+}
+.ctrl input[type=range]:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+.ctrl-val {
+  width: 34px;
+  text-align: right;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Segmented ── */
+.seg-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.seg-stack .seg { margin-bottom: 0; }
+
+.seg {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.seg button {
+  flex: 1;
+  padding: 5px 4px;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s ease-out, color 0.1s ease-out;
+}
+.seg button:last-child { border-right: none; }
+.seg button.on {
+  background: var(--surface2);
+  color: var(--text);
+}
+.seg button:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: -2px;
+}
+
+/* ── Color row ── */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+.color-label { color: var(--muted); font-size: var(--fs-xs); font-family: var(--mono); width: 76px; flex-shrink: 0; }
+.swatch {
+  width: 22px; height: 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+.swatch input[type=color] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  opacity: 0;
+  cursor: pointer;
+}
+.hex-input {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  color: var(--text);
+  width: 72px;
+  outline: none;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.hex-input:focus { border-color: var(--border2); }
+.hex-input:focus-visible { outline: 2px solid var(--muted); outline-offset: 1px; }
+
+.bg-none-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  cursor: pointer;
+}
+.bg-none-label input[type=checkbox] {
+  width: 0.6875rem;
+  height: 0.6875rem;
+  cursor: pointer;
+  accent-color: var(--muted);
+}
+
+/* ── Buttons ── */
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 14px;
+}
+.btn {
+  padding: 7px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: background 0.1s ease-out, color 0.1s ease-out;
+  text-align: center;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+.btn-ghost { background: none; color: var(--muted); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+.btn-solid { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.btn-solid:hover:not(:disabled) { background: var(--text-dim); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Download split button ── */
+.dl-split {
+  position: relative;
+  display: flex;
+}
+.dl-split #btn-dl {
+  flex: 1;
+  border-radius: var(--radius) 0 0 var(--radius);
+  border-right: none;
+}
+.dl-caret {
+  width: 26px;
+  flex-shrink: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left: 1px solid var(--bg);
+  padding: 0;
+}
+.dl-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  min-width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  z-index: 10;
+  display: none;
+}
+.dl-menu.open { display: block; }
+.dl-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s ease-out, color 0.1s ease-out;
+}
+.dl-menu button:hover { background: var(--surface); color: var(--text); }
+.dl-menu button.active { color: var(--text); }
+
+/* ── Stats ── */
+.stats {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.stat span { color: var(--text); font-weight: 500; }
+
+/* ── Main canvas area ── */
+main {
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  position: relative;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-base);
+  text-align: center;
+  pointer-events: none;
+}
+
+.empty-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 8px);
+  grid-template-rows: repeat(8, 8px);
+  gap: 3px;
+  opacity: 0.25;
+  margin-bottom: 8px;
+}
+.empty-grid span {
+  background: var(--text);
+  border-radius: 1px;
+  animation: dot-pulse var(--dur, 5s) ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.04; }
+  50%       { opacity: 0.85; }
+}
+
+#preview-wrap {
+  display: none;
+  max-width: 100%;
+  max-height: 100%;
+  position: relative;
+}
+
+#preview-wrap object {
+  display: block;
+  max-width: calc(100vw - var(--sidebar-w) - 20px);
+  max-height: calc(100dvh - 60px);
+  border: 1px solid var(--border);
+}
+
+/* ── Spinner ── */
+.spinner {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-base);
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.spinner.visible { display: flex; }
+
+/* ── Touch targets ── */
+@media (pointer: coarse) {
+  .ctrl input[type=range]::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .seg button {
+    padding: 12px 4px;
+  }
+  .btn {
+    padding: 12px 0;
+    min-height: 44px;
+  }
+  .drop-zone {
+    padding: 24px 12px;
+  }
+  .swatch {
+    width: 32px;
+    height: 32px;
+  }
+  .hex-input {
+    padding: 6px 8px;
+    font-size: var(--fs-sm);
+  }
+  .bg-none-label {
+    gap: 6px;
+  }
+}
+
+/* ── Mobile layout (≤639px) ── */
+@media (max-width: 639px) {
+  :root { --sidebar-w: 0px; }
+
+  body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 40px 1fr auto;
+  }
+
+  /* Canvas above controls */
+  main  { grid-column: 1; grid-row: 2; }
+  aside { grid-column: 1; grid-row: 3; }
+
+  aside {
+    border-right: none;
+    border-top: 1px solid var(--border);
+    max-height: 44dvh;
+  }
+
+  #preview-wrap object {
+    max-width: calc(100vw - 10px);
+    max-height: calc(56dvh - 50px);
+  }
+
+  /* Two-column ctrl grid to use full width */
+  aside > .ctrl {
+    flex: 1;
+    min-width: calc(50% - 8px);
+  }
+  aside {
+    flex-wrap: wrap;
+    flex-direction: row;
+    align-content: flex-start;
+  }
+  aside > .section-label,
+  aside > .drop-zone,
+  aside > .seg,
+  aside > .seg-stack,
+  aside > .color-row,
+  aside > .btn-row,
+  aside > .stats {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" aria-hidden="true"></div>
+  <h1>Line Dither</h1>
+  <span id="status-text" role="status" aria-live="polite">idle</span>
+</header>
+
+<aside aria-label="Controls">
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff" aria-label="Upload image file" />
+    <div>drop image or click to browse</div>
+    <span class="fname" id="fname"></span>
+  </div>
+
+  <!-- Scanline params -->
+  <div class="section-label" aria-hidden="true">Scanlines</div>
+
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-rs">row spacing</label>
+    <input type="range" id="s-rs" min="2" max="16" step="1" value="5" />
+    <span class="ctrl-val" id="v-rs" aria-live="polite">5</span>
+  </div>
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-dl">dash length</label>
+    <input type="range" id="s-dl" min="1" max="12" step="0.2" value="3.2" />
+    <span class="ctrl-val" id="v-dl" aria-live="polite">3.2</span>
+  </div>
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-mg">min gap</label>
+    <input type="range" id="s-mg" min="0.5" max="10" step="0.5" value="1.8" />
+    <span class="ctrl-val" id="v-mg" aria-live="polite">1.8</span>
+  </div>
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-tl">tilt</label>
+    <input type="range" id="s-tl" min="-4" max="4" step="0.1" value="-0.6" />
+    <span class="ctrl-val" id="v-tl" aria-live="polite">-0.6</span>
+  </div>
+
+  <!-- Image params -->
+  <div class="section-label" aria-hidden="true">Image</div>
+
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-ct">contrast</label>
+    <input type="range" id="s-ct" min="0.5" max="4" step="0.1" value="1.3" />
+    <span class="ctrl-val" id="v-ct" aria-live="polite">1.3</span>
+  </div>
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-md">max dim</label>
+    <input type="range" id="s-md" min="200" max="4000" step="100" value="1200" />
+    <span class="ctrl-val" id="v-md" aria-live="polite">1200</span>
+  </div>
+
+  <!-- Dither mode -->
+  <div class="section-label" aria-hidden="true">Algorithm</div>
+  <div class="seg-stack" id="mode-seg-wrap" role="group" aria-label="Dither algorithm">
+    <div class="seg">
+      <button class="on" data-v="floyd" aria-pressed="true">Floyd</button>
+      <button data-v="bayer4" aria-pressed="false">Bayer 4</button>
+      <button data-v="bayer8" aria-pressed="false">Bayer 8</button>
+    </div>
+    <div class="seg">
+      <button data-v="atkinson" aria-pressed="false">Atkinson</button>
+      <button data-v="stucki" aria-pressed="false">Stucki</button>
+      <button data-v="pixel" aria-pressed="false">Pixel</button>
+    </div>
+  </div>
+
+  <!-- Appearance -->
+  <div class="section-label" aria-hidden="true">Appearance</div>
+
+  <div class="ctrl">
+    <label class="ctrl-label" for="s-sw">stroke wt</label>
+    <input type="range" id="s-sw" min="0.25" max="4" step="0.25" value="0.75" />
+    <span class="ctrl-val" id="v-sw" aria-live="polite">0.75</span>
+  </div>
+
+  <div class="color-row">
+    <span class="color-label">stroke</span>
+    <div class="swatch" id="sw-stroke" style="background:#131315">
+      <input type="color" id="cp-stroke" value="#131315" aria-label="Stroke color picker" />
+    </div>
+    <input class="hex-input" id="hex-stroke" value="#131315" maxlength="7" aria-label="Stroke color hex value" />
+  </div>
+
+  <div class="color-row">
+    <span class="color-label">background</span>
+    <div class="swatch" id="sw-bg" style="background:#f5f5f0">
+      <input type="color" id="cp-bg" value="#f5f5f0" aria-label="Background color picker" />
+    </div>
+    <input class="hex-input" id="hex-bg" value="#f5f5f0" maxlength="7" aria-label="Background color hex value" />
+    <label class="bg-none-label">
+      <input type="checkbox" id="bg-none" /> none
+    </label>
+  </div>
+
+  <!-- Actions -->
+  <div class="btn-row">
+    <button class="btn btn-ghost" id="btn-render" disabled>render</button>
+    <div class="dl-split">
+      <button class="btn btn-solid" id="btn-dl" disabled>↓ SVG</button>
+      <button class="btn btn-solid dl-caret" id="btn-dl-fmt" disabled aria-label="Choose download format" aria-haspopup="true" aria-expanded="false">▾</button>
+      <div class="dl-menu" id="dl-menu" role="menu" aria-label="Download format">
+        <button role="menuitem" data-fmt="svg" class="active">SVG</button>
+        <button role="menuitem" data-fmt="png">PNG</button>
+        <button role="menuitem" data-fmt="jpeg">JPEG</button>
+        <button role="menuitem" data-fmt="webp">WebP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats" style="display:none" aria-label="Render statistics">
+    <div class="stat">dashes <span id="st-dashes">—</span></div>
+    <div class="stat">size <span id="st-size">—</span></div>
+    <div class="stat">dimensions <span id="st-dims">—</span></div>
+  </div>
+
+</aside>
+
+<main id="main">
+  <div class="empty-state" id="empty-state">
+    <div class="empty-grid" aria-hidden="true"></div>
+    <div>load an image to begin</div>
+  </div>
+
+  <div id="preview-wrap">
+    <object id="preview-img" type="image/svg+xml" aria-label="Generated SVG preview"></object>
+    <div class="spinner" id="spinner" aria-hidden="true">rendering…</div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── Decorative dot grid ────────────────────────────────────────────────────
+(function() {
+  const ops = [1,.2,.8,.1,.3,1,.2,.9,.9,.1,1,.3,.3,1,.2,.8,.2,.7,.8,.1,.7,.5,1,.2,1,.1,.7,.8,.4,.3,.4,.6,.3,1,.1,.8,.1,.6,.3,.9,.8,.2,1,.3,.9,.1,.4,.3,.4,.7,.6,.2,.8,.1,.9,.2,.5,.4,.3,.2,.4,.7,.2,.8,.1,.9,.2,.4,.3,.8,.7,.1,.6,.2,.5,.1,.8,.3,.4,.7,.9,.1,.5,.3,.7,.2,.6,.4,.3,.5];
+  const frag = document.createDocumentFragment();
+  ops.forEach(() => {
+    const s = document.createElement('span');
+    const dur = (3.5 + Math.random() * 4).toFixed(2);
+    s.style.setProperty('--dur', dur + 's');
+    s.style.animationDelay = (-Math.random() * parseFloat(dur)).toFixed(2) + 's';
+    frag.appendChild(s);
+  });
+  document.querySelector('.empty-grid').appendChild(frag);
+})();
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  fileBytes: null,
+  fileName: null,
+  fileMime: null,
+  svgBlob: null,
+  debounce: null,
+  busy: false,
+  mode: 'floyd',
+  bgNone: false,
+  fmt: 'svg',
+  svgW: 0,
+  svgH: 0,
+};
+
+// ── Slider bindings ────────────────────────────────────────────────────────
+function bindSlider(sid, vid) {
+  const s = $(sid), v = $(vid);
+  s.addEventListener('input', () => { v.textContent = s.value; schedule(); });
+}
+bindSlider('s-rs', 'v-rs');
+bindSlider('s-dl', 'v-dl');
+bindSlider('s-mg', 'v-mg');
+bindSlider('s-tl', 'v-tl');
+bindSlider('s-ct', 'v-ct');
+bindSlider('s-md', 'v-md');
+bindSlider('s-sw', 'v-sw');
+
+// ── Segmented control ──────────────────────────────────────────────────────
+$('mode-seg-wrap').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-v]');
+  if (!btn) return;
+  document.querySelectorAll('#mode-seg-wrap button').forEach(b => {
+    b.classList.remove('on');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  btn.classList.add('on');
+  btn.setAttribute('aria-pressed', 'true');
+  state.mode = btn.dataset.v;
+  schedule();
+});
+
+// ── Color bindings ─────────────────────────────────────────────────────────
+function bindColor(cpId, hexId, swId) {
+  const cp = $(cpId), hx = $(hexId), sw = $(swId);
+  cp.addEventListener('input', () => {
+    hx.value = cp.value.toUpperCase();
+    sw.style.background = cp.value;
+    schedule();
+  });
+  hx.addEventListener('change', () => {
+    let v = hx.value.trim();
+    if (!v.startsWith('#')) v = '#' + v;
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+      cp.value = v; sw.style.background = v;
+      hx.value = v.toUpperCase();
+      schedule();
+    }
+  });
+}
+bindColor('cp-stroke', 'hex-stroke', 'sw-stroke');
+bindColor('cp-bg',     'hex-bg',     'sw-bg');
+
+$('bg-none').addEventListener('change', e => {
+  state.bgNone = e.target.checked;
+  $('cp-bg').disabled = state.bgNone;
+  $('hex-bg').disabled = state.bgNone;
+  schedule();
+});
+
+// ── File input ─────────────────────────────────────────────────────────────
+const dz = $('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+$('file-input').addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+const RASTER_TYPES = new Set([
+  'image/jpeg','image/jpg','image/png','image/webp',
+  'image/gif','image/bmp','image/tiff',
+]);
+
+function setFile(f) {
+  // Reject SVG and other non-raster formats
+  if (f.type === 'image/svg+xml' || f.name.toLowerCase().endsWith('.svg')) {
+    setStatus('SVG files cannot be used as input — upload a JPEG, PNG, or WebP', 'err');
+    return;
+  }
+  if (f.type && !RASTER_TYPES.has(f.type)) {
+    setStatus(`Unsupported type: ${f.type} — use JPEG, PNG, or WebP`, 'err');
+    return;
+  }
+  $('fname').textContent = f.name;
+  $('btn-render').disabled = false;
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Sniff first 4 bytes to catch SVGs saved with wrong extension
+    const bytes = new Uint8Array(e.target.result.slice(0, 4));
+    const sig = String.fromCharCode(...bytes);
+    if (sig.startsWith('<')) {
+      setStatus('File appears to be SVG/XML — upload a raster image (JPEG, PNG, WebP)', 'err');
+      $('fname').textContent = '';
+      $('btn-render').disabled = true;
+      return;
+    }
+    state.fileBytes = e.target.result;
+    state.fileName  = f.name;
+    state.fileMime  = f.type || 'image/jpeg';
+    render();
+  };
+  reader.onerror = () => setStatus('error reading file', 'err');
+  reader.readAsArrayBuffer(f);
+}
+
+// ── Schedule (debounced re-render on param change) ─────────────────────────
+function schedule() {
+  if (!state.fileBytes) return;
+  clearTimeout(state.debounce);
+  state.debounce = setTimeout(render, 350);
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+async function render() {
+  if (!state.fileBytes || state.busy) return;
+  state.busy = true;
+
+  setStatus('rendering…', 'busy');
+  $('spinner').classList.add('visible');
+  $('btn-dl').disabled = true;
+  $('btn-dl-fmt').disabled = true;
+  $('btn-render').disabled = true;
+
+  if (!state.fileBytes) { setStatus('no image loaded', 'err'); state.busy = false; return; }
+  const fd = new FormData();
+  const blob = new Blob([state.fileBytes], { type: state.fileMime });
+  fd.append('image', blob, state.fileName);
+  fd.append('row_spacing',  $('s-rs').value);
+  fd.append('dash_length',  $('s-dl').value);
+  fd.append('min_gap',      $('s-mg').value);
+  fd.append('tilt',         $('s-tl').value);
+  fd.append('contrast',     $('s-ct').value);
+  fd.append('stroke_width', $('s-sw').value);
+  fd.append('max_dim',      $('s-md').value);
+  fd.append('mode',         state.mode);
+  fd.append('stroke_color', $('hex-stroke').value);
+  fd.append('bg_color',     state.bgNone ? 'none' : $('hex-bg').value);
+
+  try {
+    const res = await fetch('/dither', { method: 'POST', body: fd });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+
+    const dashCount = res.headers.get('X-Dash-Count');
+    const rw = res.headers.get('X-Width');
+    const rh = res.headers.get('X-Height');
+    state.svgW = parseInt(rw) || 0;
+    state.svgH = parseInt(rh) || 0;
+
+    const svgText = await res.text();
+    state.svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+
+    // Revoke any previous object URL
+    const obj = $('preview-img');
+    if (obj.data) URL.revokeObjectURL(obj.data);
+
+    const url = URL.createObjectURL(state.svgBlob);
+    obj.data = url;
+
+    $('empty-state').style.display = 'none';
+    $('preview-wrap').style.display = 'block';
+
+    // Stats
+    $('st-dashes').textContent = parseInt(dashCount).toLocaleString();
+    $('st-size').textContent   = (blob.size / 1024).toFixed(1) + ' KB';
+    $('st-dims').textContent   = `${rw} × ${rh}`;
+    $('stats').style.display   = 'flex';
+
+    setStatus(`${parseInt(dashCount).toLocaleString()} dashes`, 'ok');
+    $('btn-dl').disabled = false;
+    $('btn-dl-fmt').disabled = false;
+
+  } catch (e) {
+    setStatus('error: ' + e.message, 'err');
+    console.error(e);
+  } finally {
+    state.busy = false;
+    $('spinner').classList.remove('visible');
+    $('btn-render').disabled = false;
+  }
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+$('btn-render').addEventListener('click', render);
+
+$('btn-dl').addEventListener('click', () => downloadAs(state.fmt));
+
+const dlMenu    = $('dl-menu');
+const dlFmtBtn  = $('btn-dl-fmt');
+
+dlFmtBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const open = dlMenu.classList.toggle('open');
+  dlFmtBtn.setAttribute('aria-expanded', String(open));
+});
+
+dlMenu.addEventListener('click', e => {
+  const item = e.target.closest('[data-fmt]');
+  if (!item) return;
+  state.fmt = item.dataset.fmt;
+  dlMenu.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  item.classList.add('active');
+  $('btn-dl').textContent = '↓ ' + state.fmt.toUpperCase();
+  dlMenu.classList.remove('open');
+  dlFmtBtn.setAttribute('aria-expanded', 'false');
+});
+
+document.addEventListener('click', () => {
+  dlMenu.classList.remove('open');
+  dlFmtBtn.setAttribute('aria-expanded', 'false');
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && dlMenu.classList.contains('open')) {
+    dlMenu.classList.remove('open');
+    dlFmtBtn.setAttribute('aria-expanded', 'false');
+    dlFmtBtn.focus();
+  }
+});
+
+function downloadAs(fmt) {
+  if (!state.svgBlob) return;
+  if (fmt === 'svg') {
+    triggerDownload(URL.createObjectURL(state.svgBlob), 'line-dither.svg');
+    return;
+  }
+  const mimeMap = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+  const url = URL.createObjectURL(state.svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth  || state.svgW;
+    const h = img.naturalHeight || state.svgH;
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(blob => {
+      if (!blob) { setStatus('export failed', 'err'); return; }
+      triggerDownload(URL.createObjectURL(blob), `line-dither.${fmt}`, 1000);
+    }, mimeMap[fmt], fmt === 'jpeg' ? 0.92 : undefined);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); setStatus('export failed', 'err'); };
+  img.src = url;
+}
+
+function triggerDownload(url, filename, revokeDelay = 1000) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), revokeDelay);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function setStatus(msg, cls) {
+  const el = $('status-text');
+  el.textContent = msg;
+  el.className = cls;
+}
+</script>
+</body>
+</html>
