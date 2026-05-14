@@ -1,0 +1,10 @@
+{
+  "model": "qwen/qwen3-8b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Update the README.md for the 'Linea' project. The project now has an Information Architecture document at docs/INFORMATION_ARCHITECTURE.md. Add a section about Documentation to the README.md and ensure the file layout section reflects the new docs directory. Keep the existing structure but improve the formatting. Return ONLY the new README.md content."
+    }
+  ],
+  "temperature": 0.7
+}

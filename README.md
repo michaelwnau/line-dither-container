@@ -18,13 +18,18 @@ Then open http://localhost:5000
 
 ```
 line-dither-container/
-├── Containerfile
+├── docs/           # Documentation (IA, etc.)
+├── Containerfile   # Podman/Docker build spec
 ├── requirements.txt
-├── dither.py       # algorithm — standalone, no Flask dep
-├── app.py          # Flask server
-├── index.html      # UI (flat, served directly)
+├── dither.py       # Core algorithm (no Flask dependencies)
+├── app.py          # Flask server & API
+├── index.html      # Self-contained UI
 └── README.md
 ```
+
+## Documentation
+
+Comprehensive system details can be found in the [Information Architecture](docs/INFORMATION_ARCHITECTURE.md) file.
 
 ## Parameters
 
@@ -68,3 +73,11 @@ stroke_color=#131315  bg_color=none
 pip install -r requirements.txt
 python app.py
 ```
+
+## Development & Testing with LM Studio & MCP
+
+To develop and test Linea using **LM Studio** and **MCP**, follow these steps:
+
+1. **Configure MCP**: Use `mcp_config.json` to define MCP server settings (e.g., `filesystem`, `lm-studio`). This file specifies backend services for model loading and inference.
+2. **LM Studio Integration**: Ensure LM Studio is running with the required models. Linea leverages it for local LLM execution via the configured MCP servers.
+3. **Information Architecture**: Refer to the [Information Architecture document](docs/INFORMATION_ARCHITECTURE.md) in the `docs/` directory for project structure, API definitions, and component overviews.
