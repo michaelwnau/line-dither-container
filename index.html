@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Line Dither</title>
+<title>Linea</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -274,6 +274,8 @@ aside {
   accent-color: var(--muted);
 }
 
+#grad-dir-seg { margin-bottom: 7px; }
+
 /* ── Buttons ── */
 .btn-row {
   display: grid;
@@ -498,6 +500,7 @@ main {
   aside > .drop-zone,
   aside > .seg,
   aside > .seg-stack,
+  aside > #grad-dir-seg,
   aside > .color-row,
   aside > .btn-row,
   aside > .stats {
@@ -519,7 +522,7 @@ main {
 
 <header>
   <div class="dot" aria-hidden="true"></div>
-  <h1>Line Dither</h1>
+  <h1>Linea</h1>
   <span id="status-text" role="status" aria-live="polite">idle</span>
 </header>
 
@@ -603,6 +606,22 @@ main {
   </div>
 
   <div class="color-row">
+    <span class="color-label">grad to</span>
+    <div class="swatch" id="sw-grad" style="background:#888888;opacity:0.4">
+      <input type="color" id="cp-grad" value="#888888" aria-label="Gradient end color picker" disabled />
+    </div>
+    <input class="hex-input" id="hex-grad" value="#888888" maxlength="7" aria-label="Gradient end color hex value" disabled />
+    <label class="bg-none-label">
+      <input type="checkbox" id="grad-on" /> on
+    </label>
+  </div>
+  <div class="seg" id="grad-dir-seg" role="group" aria-label="Gradient direction" style="display:none">
+    <button class="on" data-d="h" aria-pressed="true">→</button>
+    <button data-d="v" aria-pressed="false">↓</button>
+    <button data-d="d" aria-pressed="false">↘</button>
+  </div>
+
+  <div class="color-row">
     <span class="color-label">background</span>
     <div class="swatch" id="sw-bg" style="background:#f5f5f0">
       <input type="color" id="cp-bg" value="#f5f5f0" aria-label="Background color picker" />
@@ -676,6 +695,9 @@ const state = {
   busy: false,
   mode: 'floyd',
   bgNone: false,
+  gradOn: false,
+  gradColor: '#888888',
+  gradDir: 'h',
   fmt: 'svg',
   svgW: 0,
   svgH: 0,
@@ -733,6 +755,48 @@ $('bg-none').addEventListener('change', e => {
   state.bgNone = e.target.checked;
   $('cp-bg').disabled = state.bgNone;
   $('hex-bg').disabled = state.bgNone;
+  schedule();
+});
+
+// ── Gradient controls ──────────────────────────────────────────────────────
+const cpGrad = $('cp-grad'), hxGrad = $('hex-grad'), swGrad = $('sw-grad');
+
+cpGrad.addEventListener('input', () => {
+  hxGrad.value = cpGrad.value.toUpperCase();
+  swGrad.style.background = cpGrad.value;
+  state.gradColor = hxGrad.value;
+  schedule();
+});
+hxGrad.addEventListener('change', () => {
+  let v = hxGrad.value.trim();
+  if (!v.startsWith('#')) v = '#' + v;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+    cpGrad.value = v; swGrad.style.background = v;
+    hxGrad.value = v.toUpperCase();
+    state.gradColor = hxGrad.value;
+    schedule();
+  }
+});
+
+$('grad-on').addEventListener('change', e => {
+  state.gradOn = e.target.checked;
+  cpGrad.disabled = !state.gradOn;
+  hxGrad.disabled = !state.gradOn;
+  swGrad.style.opacity = state.gradOn ? '1' : '0.4';
+  $('grad-dir-seg').style.display = state.gradOn ? 'flex' : 'none';
+  schedule();
+});
+
+$('grad-dir-seg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-d]');
+  if (!btn) return;
+  document.querySelectorAll('#grad-dir-seg button').forEach(b => {
+    b.classList.remove('on');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  btn.classList.add('on');
+  btn.setAttribute('aria-pressed', 'true');
+  state.gradDir = btn.dataset.d;
   schedule();
 });
 
@@ -814,8 +878,10 @@ async function render() {
   fd.append('stroke_width', $('s-sw').value);
   fd.append('max_dim',      $('s-md').value);
   fd.append('mode',         state.mode);
-  fd.append('stroke_color', $('hex-stroke').value);
-  fd.append('bg_color',     state.bgNone ? 'none' : $('hex-bg').value);
+  fd.append('stroke_color',  $('hex-stroke').value);
+  fd.append('bg_color',      state.bgNone ? 'none' : $('hex-bg').value);
+  fd.append('stroke_color2', state.gradOn ? state.gradColor : '');
+  fd.append('gradient_dir',  state.gradDir);
 
   try {
     const res = await fetch('/dither', { method: 'POST', body: fd });
@@ -905,7 +971,7 @@ document.addEventListener('keydown', e => {
 function downloadAs(fmt) {
   if (!state.svgBlob) return;
   if (fmt === 'svg') {
-    triggerDownload(URL.createObjectURL(state.svgBlob), 'line-dither.svg');
+    triggerDownload(URL.createObjectURL(state.svgBlob), 'linea.svg');
     return;
   }
   const mimeMap = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
@@ -921,7 +987,7 @@ function downloadAs(fmt) {
     URL.revokeObjectURL(url);
     canvas.toBlob(blob => {
       if (!blob) { setStatus('export failed', 'err'); return; }
-      triggerDownload(URL.createObjectURL(blob), `line-dither.${fmt}`, 1000);
+      triggerDownload(URL.createObjectURL(blob), `linea.${fmt}`, 1000);
     }, mimeMap[fmt], fmt === 'jpeg' ? 0.92 : undefined);
   };
   img.onerror = () => { URL.revokeObjectURL(url); setStatus('export failed', 'err'); };

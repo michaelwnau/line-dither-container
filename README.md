@@ -1,4 +1,4 @@
-# line-dither
+# Linea
 
 Converts any image into a line-dithered SVG. Floyd-Steinberg or Bayer ordered dithering. Served as a local web app.
 
