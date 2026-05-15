@@ -90,6 +90,14 @@ def index():
     )
 
 
+@app.get("/linea-3.webp")
+def favicon():
+    return send_file(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "public", "linea-3.webp"),
+        mimetype="image/webp",
+    )
+
+
 @app.route("/debug", methods=["GET", "POST"])
 def debug():
     """Diagnostic endpoint — shows exactly what the server receives."""
