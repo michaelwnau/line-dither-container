@@ -44,6 +44,14 @@ def parse_params(form):
     elif not bg_color.startswith("#") or len(bg_color) not in (4, 7):
         bg_color = "#f5f5f0"
 
+    stroke_color2 = form.get("stroke_color2", "").strip()
+    if not stroke_color2 or not stroke_color2.startswith("#") or len(stroke_color2) not in (4, 7):
+        stroke_color2 = None
+
+    gradient_dir = form.get("gradient_dir", "h")
+    if gradient_dir not in ("h", "v", "d"):
+        gradient_dir = "h"
+
     return {
         "row_spacing":  f("row_spacing",  5,    2,   20, int),
         "dash_length":  f("dash_length",  3.2,  0.5, 20.0),
@@ -52,9 +60,11 @@ def parse_params(form):
         "contrast":     f("contrast",     1.3,  0.3,  4.0),
         "stroke_width": f("stroke_width", 0.75, 0.1,  5.0),
         "max_dim":      f("max_dim",      1200, 100, 4000, int),
-        "mode":         mode,
-        "stroke_color": stroke_color,
-        "bg_color":     bg_color,
+        "mode":          mode,
+        "stroke_color":  stroke_color,
+        "bg_color":      bg_color,
+        "stroke_color2": stroke_color2,
+        "gradient_dir":  gradient_dir,
     }
 
 

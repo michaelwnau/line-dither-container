@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0e0e10;
+  --color-surface: #16161a;
+  --color-surface2: #1e1e24;
+  --color-border: #2a2a32;
+  --color-border2: #38383f;
+  --color-text: #e2e2e8;
+  --color-muted: #8a8a9a;
+  --color-ok: #6ee7b7;
+  --color-err: #fca5a5;
+  --color-text-dim: #c8c8d0;
+  --color-bg-overlay: color-mix(in srgb, var(--color-bg) 70%, transparent);
+
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  
+  --radius-sm: 4px;
+
+  --width-sidebar: 320px;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+}
+
+@layer base {
+  html, body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-text font-mono text-sm leading-relaxed;
+    font-kerning: normal;
+  }
+}
+
+@layer components {
+  .ctrl input[type="range"] {
+    -webkit-appearance: none;
+    @apply h-[2px] bg-border2 rounded-[1px] cursor-pointer flex-1;
+  }
+  .ctrl input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    @apply w-[11px] h-[11px] rounded-full bg-text cursor-pointer;
+  }
+  .ctrl input[type="range"]:focus-visible {
+    @apply outline-2 outline-muted outline-offset-4 rounded-[2px];
+  }
+  
+  /* Touch targets for coarse pointers */
+  @media (pointer: coarse) {
+    .ctrl input[type="range"]::-webkit-slider-thumb {
+      @apply w-6 h-6;
+    }
+  }
+
+  .empty-grid {
+    @apply grid grid-cols-[repeat(12,8px)] grid-rows-[repeat(8,8px)] gap-[3px] opacity-25 mb-2;
+  }
+  .empty-grid span {
+    @apply bg-text rounded-[1px];
+    animation: dot-pulse var(--dur, 5s) ease-in-out infinite;
+  }
+
+  #drop-zone {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  #drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: -150%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(136, 136, 136, 0.05) 90deg,
+      transparent 180deg,
+      rgba(136, 136, 136, 0.05) 270deg,
+      transparent 360deg
+    );
+    animation: rotate 12s linear infinite;
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.04; }
+  50%       { opacity: 0.85; }
+}

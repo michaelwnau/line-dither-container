@@ -145,6 +145,27 @@ def dither_to_paths(
     return rows, total
 
 
+# ── Gradient helper ────────────────────────────────────────────────────────────
+
+_GRAD_COORDS = {
+    "h": ("0%", "0%", "100%", "0%"),
+    "v": ("0%", "0%", "0%",   "100%"),
+    "d": ("0%", "0%", "100%", "100%"),
+}
+
+def _gradient_defs(color1: str, color2: str, direction: str) -> tuple[str, str]:
+    """Return (defs_block, paint_server_ref) for a two-stop linear gradient."""
+    gx1, gy1, gx2, gy2 = _GRAD_COORDS.get(direction, _GRAD_COORDS["h"])
+    defs = (
+        f'<defs><linearGradient id="g" x1="{gx1}" y1="{gy1}" x2="{gx2}" y2="{gy2}"'
+        f' gradientUnits="objectBoundingBox">'
+        f'<stop offset="0%" stop-color="{color1}"/>'
+        f'<stop offset="100%" stop-color="{color2}"/>'
+        f'</linearGradient></defs>'
+    )
+    return defs, "url(#g)"
+
+
 # ── SVG assembly ───────────────────────────────────────────────────────────────
 
 def rows_to_svg(
@@ -154,6 +175,8 @@ def rows_to_svg(
     stroke_color: str = "#131315",
     stroke_width: float = 0.75,
     bg_color: str | None = "#f5f5f0",
+    stroke_color2: str | None = None,
+    gradient_dir: str = "h",
 ) -> str:
     parts = []
     for row in rows:
@@ -167,12 +190,17 @@ def rows_to_svg(
         if bg_color else ""
     )
 
+    if stroke_color2:
+        defs, paint = _gradient_defs(stroke_color, stroke_color2, gradient_dir)
+    else:
+        defs, paint = "", stroke_color
+
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" fill="none">'
-        f"{bg_rect}"
-        f'<path stroke="{stroke_color}" stroke-width="{stroke_width}" '
+        f"{defs}{bg_rect}"
+        f'<path stroke="{paint}" stroke-width="{stroke_width}" '
         f'stroke-linecap="round" d="{path_d}"/>'
         f"</svg>"
     )
@@ -187,8 +215,15 @@ def lum_to_pixel_svg(
     block_size: int,
     stroke_color: str,
     bg_color: str | None,
+    stroke_color2: str | None = None,
+    gradient_dir: str = "h",
 ) -> tuple[str, int]:
     """Render image as solid filled blocks (pixellate mode)."""
+    if stroke_color2:
+        defs, paint = _gradient_defs(stroke_color, stroke_color2, gradient_dir)
+    else:
+        defs, paint = "", stroke_color
+
     img_h, img_w = lum.shape
     parts = []
     for y in range(0, img_h, block_size):
@@ -197,14 +232,14 @@ def lum_to_pixel_svg(
             bw = min(block_size, img_w - x)
             if float(lum[y:y + bh, x:x + bw].mean()) < 0.5:
                 parts.append(
-                    f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" fill="{stroke_color}"/>'
+                    f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" fill="{paint}"/>'
                 )
 
     bg = f'<rect width="{width}" height="{height}" fill="{bg_color}"/>' if bg_color else ""
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}">'
-        f'{bg}{"".join(parts)}</svg>'
+        f'{defs}{bg}{"".join(parts)}</svg>'
     )
     return svg, len(parts)
 
@@ -223,6 +258,8 @@ def image_to_svg(
     stroke_width: float = 0.75,
     bg_color: str | None = "#f5f5f0",
     max_dim: int = 1200,
+    stroke_color2: str | None = None,
+    gradient_dir: str = "h",
 ) -> tuple[str, int, int, int]:
     """
     Full pipeline: PIL Image → SVG string.
@@ -242,6 +279,8 @@ def image_to_svg(
             block_size=row_spacing,
             stroke_color=stroke_color,
             bg_color=bg_color,
+            stroke_color2=stroke_color2,
+            gradient_dir=gradient_dir,
         )
     else:
         rows, dash_count = dither_to_paths(
@@ -257,6 +296,8 @@ def image_to_svg(
             stroke_color=stroke_color,
             stroke_width=stroke_width,
             bg_color=bg_color,
+            stroke_color2=stroke_color2,
+            gradient_dir=gradient_dir,
         )
 
     return svg, w, h, dash_count

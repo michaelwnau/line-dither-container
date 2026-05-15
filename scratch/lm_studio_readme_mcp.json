@@ -1,0 +1,10 @@
+{
+  "model": "qwen/qwen3-8b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Update the README.md for the 'Linea' project. Add a section describing how to develop and test the project using LM Studio and MCP. Mention that the project includes an Information Architecture document in docs/ and that mcp_config.json is used to configure MCP servers like 'filesystem' and 'lm-studio'. Keep it professional and concise. Return ONLY the markdown content for the README.md."
+    }
+  ],
+  "temperature": 0.5
+}

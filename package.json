@@ -1,0 +1,12 @@
+{
+  "name": "line-dither-container",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --prefix web dev",
+    "build": "pnpm --prefix web build",
+    "preview": "pnpm --prefix web preview",
+    "container:build": "podman build -t line-dither .",
+    "container:run": "podman run --rm -p 5000:5000 line-dither"
+  }
+}
