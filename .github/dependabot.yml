@@ -1,24 +1,30 @@
 version: 2
 updates:
+  # Enable npm ecosystem for pnpm (Dependabot requires 'npm' for pnpm projects and detects pnpm-lock.yaml)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "daily"
-    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    open-pull-requests-limit: 50
+    versioning-strategy: increase
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "automated-pr"
 
-  - package-ecosystem: "npm"
-    directory: "/web"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-
+  # Keep GitHub Actions up to date daily
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    open-pull-requests-limit: 10
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "automated-pr"

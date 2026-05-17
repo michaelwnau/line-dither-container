@@ -81,3 +81,9 @@ To develop and test Linea using **LM Studio** and **MCP**, follow these steps:
 1. **Configure MCP**: Use `mcp_config.json` to define MCP server settings (e.g., `filesystem`, `lm-studio`). This file specifies backend services for model loading and inference.
 2. **LM Studio Integration**: Ensure LM Studio is running with the required models. Linea leverages it for local LLM execution via the configured MCP servers.
 3. **Information Architecture**: Refer to the [Information Architecture document](docs/INFORMATION_ARCHITECTURE.md) in the `docs/` directory for project structure, API definitions, and component overviews.
+
+---
+
+## Copyright
+
+&copy; 2026 Michael Nau / Bornless Studio. All rights reserved.
